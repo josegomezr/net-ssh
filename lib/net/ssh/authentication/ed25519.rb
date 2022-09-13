@@ -135,6 +135,10 @@ module Net
             # TODO this is not pem
             ssh_type + Base64.encode64(@verify_key.to_bytes)
           end
+
+          def private?
+            false
+          end
         end
 
         class PrivKey
@@ -177,6 +181,10 @@ module Net
 
           def self.read(data, password)
             OpenSSHPrivateKeyLoader.read(data, password)
+          end
+
+          def private?
+            true
           end
         end
       end

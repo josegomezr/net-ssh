@@ -13,6 +13,7 @@ require 'net/ssh/transport/session'
 require 'net/ssh/authentication/session'
 require 'net/ssh/connection/session'
 require 'net/ssh/prompt'
+require 'net/ssh/ssh_sig'
 
 module Net
   # Net::SSH is a library for interacting, programmatically, with remote
