@@ -18,21 +18,14 @@ module Net
       def initialize(key)
         signature_params = ALLOWED_SIGN_ALGOS[key.ssh_type]
 
-        raise "Unknown signature algorithm for key-type #{key.ssh_type}" unless signature_params
-
-        unless [
-            OpenSSL::PKey::RSA,
-            Authentication::ED25519::PrivKey
-          ].include?(key.class)
-          raise 'unsupported key type'
-        end
+        raise SignatureUnsupportedKeyType, "Unknown signature algorithm for key-type #{key.ssh_type}" unless signature_params
 
         @key = key
         @hash_algo, @sign_algo = signature_params
       end
 
       def sign(namespace, data, as_armor: false)
-        raise "Can't sign with a public key" unless @key.private?
+        raise SignatureMissingPrivateKey, "Can't sign with a public key" unless @key.private?
 
         digest = digester_klass(@hash_algo).digest(data)
 
@@ -64,11 +57,11 @@ module Net
         if from_armor
           message = message.strip
 
-          raise "Invalid armor signature format" unless message.start_with?(BEGIN_ARMOR)
+          raise SignatureBadArmorFormat, "Invalid armor signature format" unless message.start_with?(BEGIN_ARMOR)
 
-          raise "Invalid armor signature format" unless message.end_with?(END_ARMOR)
+          raise SignatureBadArmorFormat, "Invalid armor signature format" unless message.end_with?(END_ARMOR)
 
-          message = message[(BEGIN_ARMOR.size)..-(END_ARMOR.size + 1)]
+          message = message[(BEGIN_ARMOR.size)..-(END_ARMOR.size + 1)].to_s
           message = Base64.decode64(message)
         end
 
@@ -76,39 +69,45 @@ module Net
         message_buffer = Buffer.new(message)
 
         # verify preamble
-        raise "Couldn't verify signature: invalid format" unless message_buffer.read(MAGIC_PREAMBLE.size) == MAGIC_PREAMBLE
+        raise SignatureInvalidFormat, "Couldn't verify signature: invalid format" unless message_buffer.read(MAGIC_PREAMBLE.size) == MAGIC_PREAMBLE
 
         sig_version = message_buffer.read_long
 
         # verify signature version
-        raise "Signature version #{sig_version} is larger than supported version #{SIG_VERSION}" unless sig_version <= SIG_VERSION
+        unless sig_version <= SIG_VERSION
+          raise SignatureUnsupportedVersion, "Signature version #{sig_version} is larger than supported version #{SIG_VERSION}"
+        end
 
         got_publickey = message_buffer.read_string
 
         # verify public key
         allowed_signers << public_key.to_blob.to_s if allowed_signers.empty?
 
-        raise "Signature key is not in the allowed signers" unless allowed_signers.include?(got_publickey)
+        raise SignatureSignerNotAllowed, "Signature key is not in the allowed signers" unless allowed_signers.include?(got_publickey)
 
         got_namespace = message_buffer.read_string
         # verify namespace
-        raise "Couldn't verify signature: namespace does not match" unless expected_namespace == got_namespace
+        raise SignatureNamespaceMismatch, "Couldn't verify signature: namespace does not match" unless expected_namespace == got_namespace
 
         message_buffer.read_long # reserved
 
         hash_algorithm = message_buffer.read_string
         # verify hash algorithm
-        raise "Couldn't verify signature: hash algorithm mismatch" unless hash_algorithm == @hash_algo
+        unless hash_algorithm == @hash_algo
+          raise SignatureHashAlgoritmMismatch, "Couldn't verify signature: hash algorithm mismatch #{hash_algorithm}:#{@hash_algo}"
+        end
 
         signature_blob = message_buffer.read_string
         # check for trailing data
-        raise "Signature contains trailing data" unless message_buffer.eof?
+        raise SignatureTrailingData, "Signature contains trailing data" unless message_buffer.eof?
 
         signature_buffer = Buffer.new(signature_blob)
         got_sign_algo = signature_buffer.read_string
 
         # check signing algorithm
-        raise "Couldn't verify signature: unsupported signature algorithm #{got_sign_algo}" unless @sign_algo == got_sign_algo
+        unless @sign_algo == got_sign_algo
+          raise SignatureSignAlgoritmMismatch, "Couldn't verify signature: unsupported signature algorithm #{got_sign_algo}"
+        end
 
         digest = digester_klass(hash_algorithm).digest(data)
 
@@ -119,11 +118,9 @@ module Net
         # check ssh signature
         sign_result = public_key.ssh_do_verify(got_signature, expected_signing_buffer.to_s, { host_key: got_sign_algo })
 
-        unless sign_result
-          raise "Signature verification failed: invalid signature"
-        end
+        raise SignatureInvalid, "Signature verification failed: invalid signature" unless sign_result
 
-        return true
+        true
       end
 
       private
@@ -146,7 +143,7 @@ module Net
         when "sha256"
           OpenSSL::Digest::SHA256
         else
-          raise "Hashing algorithm '#{hash_algo}' not allowed"
+          raise "Hash algorithm '#{hash_algo}' not allowed"
         end
       end
 

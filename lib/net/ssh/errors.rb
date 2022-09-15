@@ -102,5 +102,39 @@ module Net
     # you want to proceed anyway, simply call the remember_host! method on the
     # exception, and then retry.
     class HostKeyUnknown < HostKeyError; end
+
+    # Raised when SshSig is created with an unsupported key
+    class SignatureUnsupportedKeyType < HostKeyError; end
+
+    # Raised when trying to create an SSH signature from a public key
+    class SignatureMissingPrivateKey < HostKeyError; end
+
+    # Raised when trying to verify an ssh signature in armored format with
+    # an invalid armor
+    class SignatureBadArmorFormat < HostKeyError; end
+
+    # Raised when the signature has an invalid format
+    class SignatureInvalidFormat < HostKeyError; end
+
+    # Raised when the signature has an invalid format
+    class SignatureUnsupportedVersion < HostKeyError; end
+
+    # Raised when signing key is not in the allowed list of signers
+    class SignatureSignerNotAllowed < HostKeyError; end
+
+    # Raised when signature namespace does not match the expected namespace
+    class SignatureNamespaceMismatch < HostKeyError; end
+
+    # Raised when signature hash algorithm does not match the expected hash algorithm
+    class SignatureHashAlgoritmMismatch < HostKeyError; end
+
+    # Raised when signature has trailing data
+    class SignatureTrailingData < HostKeyError; end
+
+    # Raised when signature sign algorithm does not match the expected sign algorithm
+    class SignatureSignAlgoritmMismatch < HostKeyError; end
+
+    # Raised when the signature is invalid (e.g. signed with another key)
+    class SignatureInvalid < HostKeyError; end
   end
 end
